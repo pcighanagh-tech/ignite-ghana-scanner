@@ -1,47 +1,67 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IGNITE GHANA 2026 — Staff QR Scanner</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#172b4d">
+<title>IGNITE GHANA 2026 — QR Scanner</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f3f5f8;color:#172033;font-family:Arial,sans-serif}.wrap{max-width:620px;margin:20px auto;padding:14px}.card{background:#fff;border:1px solid #e1e6ee;border-radius:16px;padding:20px;box-shadow:0 4px 18px #17203310}h1{font-size:23px;margin:0 0 8px}p{color:#667085;line-height:1.5}label{display:block;font-weight:700;margin:15px 0 6px}select,input,button{width:100%;font-size:16px;padding:13px;border-radius:9px}select,input{border:1px solid #cbd2dc;background:#fff}button{border:0;background:#172b4d;color:#fff;font-weight:700;margin-top:15px}button:disabled{opacity:.55}#reader{width:100%;margin:18px auto}.status{padding:13px;border-radius:9px;background:#eef3f9;margin-top:14px;line-height:1.45}.good{background:#eaf7ef;color:#12633b}.bad{background:#fff0ef;color:#a52822}.small{font-size:13px;color:#667085}
-</style></head><body><main class="wrap"><section class="card"><h1>IGNITE GHANA 2026</h1><p>Staff QR attendance scanner. Keep the staff dashboard open in the other browser tab. This page only reads QR codes; your staff login and attendance records remain in the official system.</p>
-<label>Conference day</label><select id="day"><option>DAY 1</option><option>DAY 2</option><option>DAY 3</option></select>
-<label>Scanner/device label</label><input id="device" value="Entrance scanner" maxlength="80">
-<div id="reader"></div><button id="start">Start camera scanner</button><button id="stop" style="background:#e9edf3;color:#172033">Stop camera</button>
-<div id="status" class="status">Waiting to start. Allow camera access when your browser asks.</div><p class="small">If prompted, choose the rear camera. After each scan, the result will be recorded by the official staff dashboard.</p>
-</section></main>
+*{box-sizing:border-box}body{margin:0;padding:18px;background:#f3f5f8;color:#172033;font-family:Arial,sans-serif}
+main{max-width:620px;margin:0 auto;background:#fff;border:1px solid #e1e6ee;border-radius:18px;padding:22px;box-shadow:0 5px 22px #17203312}
+h1{font-size:23px;margin:0 0 7px;color:#172b4d}p{color:#647084;line-height:1.5}
+label{display:block;font-weight:700;margin:18px 0 7px}select,input,button{width:100%;font:inherit;border-radius:10px;padding:14px}
+select,input{border:1px solid #cbd3df;background:#fff}button{border:0;background:#1c2e52;color:#fff;font-weight:700;margin-top:14px;cursor:pointer}
+button.secondary{background:#e9edf3;color:#172033}button:disabled{opacity:.5;cursor:not-allowed}
+#reader{width:100%;margin:18px auto 8px;overflow:hidden}#status{padding:14px;border-radius:10px;background:#f1f5f9;line-height:1.5;margin-top:14px;overflow-wrap:anywhere}
+#status.good{background:#eaf7ef;color:#12643b}#status.bad{background:#fff0ef;color:#a12820}.small{font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<h1>IGNITE GHANA 2026</h1>
+<p>Secure QR attendance scanner. This scanner is connected to the signed-in staff dashboard on this page.</p>
+<label for="day">Conference day</label>
+<select id="day"><option>DAY 1</option><option>DAY 2</option><option>DAY 3</option></select>
+<label for="device">Scanner/device label</label>
+<input id="device" value="Entrance scanner" maxlength="80">
+<div id="reader"></div>
+<button id="start" type="button">Start camera scanner</button>
+<button id="stop" class="secondary" type="button" disabled>Stop scanner</button>
+<div id="status" role="status">Ready. Start the camera, then point it at an attendee's QR pass.</div>
+<p class="small">When a QR code is recognised, its token is sent to the staff dashboard for attendance validation.</p>
+</main>
 <script>
-const DASHBOARD_ORIGIN='https://script.google.com';
-let qr=null, busy=false;
-const statusBox=document.getElementById('status');
-function status(message,kind=''){statusBox.className='status '+kind;statusBox.textContent=message;}
-function sendToken(token){
- if(!window.opener || window.opener.closed){status('The staff dashboard tab is not connected. Close this tab and reopen the scanner from the staff dashboard.','bad');return;}
- busy=true; document.getElementById('start').disabled=true;
- window.opener.postMessage({type:'IGNITE_QR_SCAN',token:String(token),day:document.getElementById('day').value,deviceLabel:document.getElementById('device').value.trim()||'Entrance scanner'},DASHBOARD_ORIGIN);
- status('QR recognised. Sending it to the staff dashboard for attendance recording…');
-}
-window.addEventListener('message',event=>{
- if(event.origin!==DASHBOARD_ORIGIN || event.source!==window.opener || !event.data || event.data.type!=='IGNITE_CHECKIN_RESULT')return;
- const r=event.data.result||{};
- const kind=r.status==='RECORDED'?'good':(r.status==='DUPLICATE'?'':'bad');
- status([r.status||'ERROR',r.attendeeName||'',r.registrationId||'',r.message||'No response received.'].filter(Boolean).join(' — '),kind);
- busy=false;document.getElementById('start').disabled=false;
-});
-async function stop(){if(qr){try{if(qr.isScanning)await qr.stop();await qr.clear();}catch(e){}qr=null;}document.getElementById('reader').innerHTML='';}
-async function start(){
- if(!window.opener || window.opener.closed){status('Please launch this scanner using the Open external QR scanner button in the signed-in staff dashboard.','bad');return;}
- if(qr)return;
- if(!window.isSecureContext || !navigator.mediaDevices){status('Camera access is unavailable. Open this GitHub Pages link in Safari or Chrome.','bad');return;}
- status('Starting camera… allow camera access if asked.');
- qr=new Html5Qrcode('reader');
+(() => {
+const statusBox=document.getElementById('status'),startButton=document.getElementById('start'),stopButton=document.getElementById('stop');
+let qrScanner=null,busy=false;
+function status(message,kind){statusBox.textContent=message;statusBox.className=kind||'';}
+async function stopScanner(){if(!qrScanner)return;const current=qrScanner;qrScanner=null;try{if(current.isScanning)await current.stop();await current.clear();}catch(e){}startButton.disabled=false;stopButton.disabled=true;}
+async function startScanner(){
+ if(qrScanner)return;
+ if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('Camera access requires a secure HTTPS page in a supported browser.','bad');return;}
+ if(!window.Html5Qrcode){status('The QR scanning library did not load. Check your internet connection and reload this page.','bad');return;}
+ startButton.disabled=true;status('Requesting camera access. Please allow the browser permission when prompted.');qrScanner=new Html5Qrcode('reader');
+ const onScanSuccess=async(decodedText)=>{
+  if(busy)return;busy=true;await stopScanner();
+  const message={type:'IGNITE_QR_SCAN',token:String(decodedText).trim(),day:document.getElementById('day').value,deviceLabel:document.getElementById('device').value.trim()||'Entrance scanner'};
+  if(!message.token){status('The QR code was empty. Start the scanner and try again.','bad');busy=false;return;}
+  if(window.parent === window){status('This scanner must be displayed inside the signed-in staff dashboard. Return to the dashboard and tap Open live camera scanner.','bad');busy=false;return;}
+  // Send the scan to the parent dashboard iframe host. The dashboard validates origin and frame source.
+  window.parent.postMessage(message,'*');
+  status('QR recognised and sent to the staff dashboard. Check the dashboard tab for the attendance result.','good');busy=false;
+ };
  try{
-  const cameras=await Html5Qrcode.getCameras();if(!cameras.length)throw new Error('No camera found.');
-  const rear=cameras.find(c=>/back|rear|environment/i.test(c.label||''));const cam=rear||cameras[cameras.length-1];
-  await qr.start(cam.id,{fps:10,qrbox:{width:250,height:250},aspectRatio:1},decoded=>{
-   if(busy)return;busy=true;try{qr.pause(true);}catch(e){}sendToken(decoded);
-  });status('Camera is ready. Point it at an attendee QR code.','good');
- }catch(e){qr=null;status('Camera could not start: '+(e.message||e),'bad');}
+  await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:250},aspectRatio:1},onScanSuccess);
+  status('Camera is on. Point it steadily at the attendee’s QR code.');stopButton.disabled=false;
+ }catch(error){
+  const detail=error&&(error.name||error.message)?(error.name||error.message):String(error);
+  await stopScanner();status('Could not start the camera: '+detail+'. Check browser camera permission and make sure no other app is using the camera.','bad');startButton.disabled=false;
+ }
 }
-document.getElementById('start').addEventListener('click',start);
-document.getElementById('stop').addEventListener('click',stop);
-</script></body></html>
+startButton.addEventListener('click',startScanner);
+stopButton.addEventListener('click',async()=>{await stopScanner();status('Scanner stopped. You can start it again whenever you are ready.');});
+})();
+</script>
+</body>
+</html>
